@@ -63,7 +63,7 @@ void csv_to_binary(const char *csv_path, const char *bin_path, int separator, in
         token = strsep(&ptr, delim); p.baggage_weight = (token) ? atof(token) : 0.0f;
         token = strsep(&ptr, delim); p.loyalty_points = (token) ? atoi(token) : 0;
 
-        // 2. ÖNEMLİ: Status (Emoji içeren kısım)
+        //  (Emoji içeren kısım)
         token = strsep(&ptr, delim); 
         if(token) { 
             strncpy(p.status, token, 15); // Boyut 16 ise max 15 karakter + \0
