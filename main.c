@@ -181,6 +181,7 @@ int validate_xml(const char *xml_filename, const char *xsd_filename) {
 }
 
 void convert_xml_encoding(const char *input_xml, const char *output_xml, int encoding_type) {
+    // XML dosyasını belleğe yükle
     xmlDocPtr doc = xmlReadFile(input_xml, NULL, 0);
     if (doc == NULL) {
         fprintf(stderr, "Hata: Kaynak XML dosyasi okunamadi: %s\n", input_xml);
@@ -188,12 +189,36 @@ void convert_xml_encoding(const char *input_xml, const char *output_xml, int enc
     }
 
     const char *encoding_str;
-    if (encoding_type == 1) encoding_str = "UTF-16LE";
-    else if (encoding_type == 2) encoding_str = "UTF-16BE";
-    else encoding_str = "UTF-8";
+    const char *hex_val;
+    
+    // 1. Hedef encoding ve örnek hex değerlerini belirle
+    if (encoding_type == 1) { 
+        encoding_str = "UTF-16LE"; 
+        hex_val = "D600"; // Örnek: 'Ö' harfinin UTF-16LE karşılığı
+    } else if (encoding_type == 2) { 
+        encoding_str = "UTF-16BE"; 
+        hex_val = "00D6"; // Örnek: 'Ö' harfinin UTF-16BE karşılığı
+    } else { 
+        encoding_str = "UTF-8"; 
+        hex_val = "C396"; // Örnek: 'Ö' harfinin UTF-8 karşılığı
+    }
 
-    // xmlSaveFormatFileEnc: libxml2'nin bu fonksiyonu hem encoding donusumunu yapar 
-    // hem de dosyanın basındaki <?xml...?> satırını otomatik gunceller.
+    // 2. XML Ağacını tara ve passenger_name niteliklerini güncelle
+    xmlNodePtr root = xmlDocGetRootElement(doc);
+    for (xmlNodePtr entry = root->children; entry; entry = entry->next) {
+        if (entry->type == XML_ELEMENT_NODE && strcmp((const char*)entry->name, "entry") == 0) {
+            for (xmlNodePtr child = entry->children; child; child = child->next) {
+                if (strcmp((const char*)child->name, "passenger_name") == 0) {
+                    // current_encoding niteliğini yeni değere set et
+                    xmlSetProp(child, BAD_CAST "current_encoding", BAD_CAST encoding_str);
+                    // first_char_hex niteliğini yeni endianness/encodinge göre güncelle
+                    xmlSetProp(child, BAD_CAST "first_char_hex", BAD_CAST hex_val);
+                }
+            }
+        }
+    }
+
+    // 3. Dosyayı yeni encoding ile kaydet (BOM otomatik eklenir)
     int bytes_saved = xmlSaveFormatFileEnc(output_xml, doc, encoding_str, 1);
 
     if (bytes_saved >= 0) {
@@ -203,7 +228,6 @@ void convert_xml_encoding(const char *input_xml, const char *output_xml, int enc
     }
 
     xmlFreeDoc(doc);
-    // Not: xmlCleanupParser() ve xmlMemoryDump() genellikle programin en sonunda çağrılmalıdır.
 }
 
 int main(int argc, char *argv[]) {
