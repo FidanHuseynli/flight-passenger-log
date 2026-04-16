@@ -220,7 +220,7 @@ int main(int argc, char *argv[]) {
 
     // 3. Varsayılan Değerler ve Opsiyonel Argümanlar
     int separator = 1; // Default comma [cite: 7]
-    int opsys = 1;     // Default windows [cite: 7]
+    int opsys = 2;     // Default windows [cite: 7]
     int encoding = 3;  // Default UTF-8 [cite: 18]
 
     // 4. Bayrakları (Flags) Tara

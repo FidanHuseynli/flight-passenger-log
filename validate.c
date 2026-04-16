@@ -7,8 +7,8 @@ int main()
     xmlSchemaPtr schema = NULL;
     xmlSchemaParserCtxtPtr ctxt;
 	
-    char *XMLFileName = "shipto.xml"; // write your xml file here
-    char *XSDFileName = "shipto.xsd"; // write your xsd file here
+    char *XMLFileName = "flightlogs_utf8.xml"; // write your xml file here
+    char *XSDFileName = "flightlog.xsd"; // write your xsd file here
     
     
     xmlLineNumbersDefault(1); //set line numbers, 0> no substitution, 1>substitution
