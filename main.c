@@ -6,7 +6,8 @@
 #include <libxml/xmlsave.h>  
 #include <libxml/xmlschemas.h>
 
-// Yolcu Şablonu
+
+#pragma pack(push, 1)
 typedef struct {
     char ticket_id[10];       
     char timestamp[25];       
@@ -19,8 +20,8 @@ typedef struct {
     char app_ver[15];         
     char passenger_name[100]; 
 } Passenger;
+#pragma pack(pop)
 
-// --- ADIM 1: CSV'DEN BINARY'YE ---
 void csv_to_binary(const char *csv_path, const char *bin_path, int separator, int opsys) {
     FILE *csv = fopen(csv_path, "r");
     FILE *bin = fopen(bin_path, "wb");
@@ -30,47 +31,72 @@ void csv_to_binary(const char *csv_path, const char *bin_path, int separator, in
         return;
     }
 
-    // 1. Ayiriciyi (Delimiter) Belirle [cite: 82]
+    
     char delim[2];
     if (separator == 2) strcpy(delim, "\t");
     else if (separator == 3) strcpy(delim, ";");
     else strcpy(delim, ",");
 
     char line[1024];
-    // Baslik satirini oku ve atla
+   
     if (!fgets(line, sizeof(line), csv)) return;
 
     while (fgets(line, sizeof(line), csv)) {
-        // 2. Satir Sonu Temizligi (Opsys) [cite: 14, 84]
-        // Windows (\r\n), Linux (\n) ve Mac (\n) uyumu icin \r ve \n karakterlerini sileriz
+        while (fgets(line, sizeof(line), csv)) {
         line[strcspn(line, "\r\n")] = 0;
 
         Passenger p;
+        memset(&p, 0, sizeof(Passenger)); // 1. ÖNEMLİ: Tüm struct'ı temizle
+        
         char *ptr = line;
         char *token;
 
-        // 3. Dinamik Parçalama
-        // Her sütun için 'delim' degiskenini kullanarak ilerliyoruz
-        token = strsep(&ptr, delim); if(token) strcpy(p.ticket_id, token);
-        token = strsep(&ptr, delim); if(token) strcpy(p.timestamp, token);
+        // Ticket ID
+        token = strsep(&ptr, delim); 
+        if(token) { strncpy(p.ticket_id, token, 9); p.ticket_id[9] = '\0'; }
+
+        // Timestamp
+        token = strsep(&ptr, delim); 
+        if(token) { strncpy(p.timestamp, token, 24); p.timestamp[24] = '\0'; }
+
+        // Sayısal Değerler
         token = strsep(&ptr, delim); p.baggage_weight = (token) ? atof(token) : 0.0f;
         token = strsep(&ptr, delim); p.loyalty_points = (token) ? atoi(token) : 0;
-        token = strsep(&ptr, delim); if(token) strcpy(p.status, token);
-        token = strsep(&ptr, delim); if(token) strcpy(p.destination, token);
-        token = strsep(&ptr, delim); if(token) strcpy(p.cabin_class, token);
-        token = strsep(&ptr, delim); p.seat_num = (token) ? atoi(token) : 0;
-        token = strsep(&ptr, delim); if(token) strcpy(p.app_ver, token);
-        token = strsep(&ptr, delim); if(token) strcpy(p.passenger_name, token);
 
-        // Struct'ı binary olarak dosyaya yaz 
+        // 2. ÖNEMLİ: Status (Emoji içeren kısım)
+        token = strsep(&ptr, delim); 
+        if(token) { 
+            strncpy(p.status, token, 15); // Boyut 16 ise max 15 karakter + \0
+            p.status[15] = '\0'; 
+        }
+
+        // Destination & Cabin
+        token = strsep(&ptr, delim); 
+        if(token) { strncpy(p.destination, token, 34); p.destination[34] = '\0'; }
+        
+        token = strsep(&ptr, delim); 
+        if(token) { strncpy(p.cabin_class, token, 14); p.cabin_class[14] = '\0'; }
+
+        token = strsep(&ptr, delim); p.seat_num = (token) ? atoi(token) : 0;
+
+        // App Version
+        token = strsep(&ptr, delim); 
+        if(token) { strncpy(p.app_ver, token, 14); p.app_ver[14] = '\0'; }
+
+        // Passenger Name
+        token = strsep(&ptr, delim); 
+        if(token) { strncpy(p.passenger_name, token, 99); p.passenger_name[99] = '\0'; }
+
         fwrite(&p, sizeof(Passenger), 1, bin);
+    }
     }
 
     fclose(csv);
     fclose(bin);
     printf("Dönüsüm Tamamlandi: %s -> %s (Ayirici: '%s')\n", csv_path, bin_path, delim);
 }
-// --- ADIM 2: BINARY'DEN XML'E ---
+
+
 void binary_to_xml(const char *bin_path, const char *xml_path) {
     FILE *bin = fopen(bin_path, "rb");
     if (!bin) return;
@@ -168,12 +194,12 @@ int validate_xml(const char *xml_filename, const char *xsd_filename) {
 
     xmlLineNumbersDefault(1);
     
-    // XSD dosyasını oku ve parse et
+
     ctxt = xmlSchemaNewParserCtxt(xsd_filename);
     schema = xmlSchemaParse(ctxt);
     xmlSchemaFreeParserCtxt(ctxt);
 
-    // XML dosyasını oku
+    
     doc = xmlReadFile(xml_filename, NULL, 0);
     if (doc == NULL) {
         fprintf(stderr, "Hata: %s dosyası okunamadı.\n", xml_filename);
@@ -212,14 +238,14 @@ void convert_xml_encoding(const char *input_xml, const char *output_xml, int enc
             for (xmlNodePtr child = entry->children; child; child = child->next) {
                 if (xmlStrEqual(child->name, BAD_CAST "passenger_name")) {
                     
-                    // 1. Yolcunun ismini al
+                   
                     xmlChar *name = xmlNodeGetContent(child);
                     char hex_val[32] = "";
                     
                     if (name && strlen((char *)name) > 0) {
                         unsigned char *c = (unsigned char *)name;
                         
-                        // 2. İlk karakterin UTF-8 byte uzunluğunu bul
+
                         int len = 1;
                         if ((c[0] & 0xE0) == 0xC0) len = 2;
                         else if ((c[0] & 0xF0) == 0xE0) len = 3;
@@ -229,23 +255,21 @@ void convert_xml_encoding(const char *input_xml, const char *output_xml, int enc
                         if (encoding_type == 3) { // UTF-8
                             for(int i = 0; i < len; i++) sprintf(hex_val + (i * 2), "%02X", c[i]);
                         } 
-                        else { // UTF-16 (Dönüşüm simülasyonu)
-                            // Not: Tam bir UTF-8 -> UTF-16 conversion için iconv veya 
-                            // manuel bit kaydırma gerekir. Ödev isterlerine göre 'Ö' 
-                            // referans alınıyorsa aşağıdaki mantık temel alınır:
-                            if (c[0] == 0xC3 && c[1] == 0x96) { // 'Ö' Karakteri
+                        else { // UTF-16 
+                            
+                            if (c[0] == 0xC3 && c[1] == 0x96) { // 'Ö'
                                 strcpy(hex_val, (encoding_type == 1) ? "D600" : "00D6");
-                            } else if (c[0] < 0x80) { // Standart ASCII (A, B, C...)
+                            } else if (c[0] < 0x80) { // (A, B, C...)
                                 sprintf(hex_val, (encoding_type == 1) ? "%02X00" : "00%02X", c[0]);
                             } else {
-                                // Diğer UTF-8 karakterler için genel UTF-8 hex'ini bas
+                                //  genel UTF-8 hex'i
                                 for(int i = 0; i < len; i++) sprintf(hex_val + (i * 2), "%02X", c[i]);
                             }
                         }
                         xmlFree(name);
                     }
 
-                    // 4. Attribute'ları güncelle
+                   
                     xmlSetProp(child, BAD_CAST "current_encoding", BAD_CAST encoding_str);
                     xmlSetProp(child, BAD_CAST "first_char_hex", BAD_CAST hex_val);
                 }
@@ -253,29 +277,29 @@ void convert_xml_encoding(const char *input_xml, const char *output_xml, int enc
         }
     }
 
-    // Dosyayı kaydet (Libxml2 encoding parametresine göre BOM ve dönüşümü halleder)
+   
     xmlSaveFormatFileEnc(output_xml, doc, encoding_str, 1);
     xmlFreeDoc(doc);
     printf("Mod 4 Tamam: %s -> %s (%s)\n", input_xml, output_xml, encoding_str);}
 
 int main(int argc, char *argv[]) {
-    // 1. Temel Argüman Sayısı Kontrolü
+   
     if (argc < 4) {
         print_usage();
         return 1;
     }
 
-    // 2. Zorunlu Konumsal Argümanlar
+    
     char *input_file = argv[1];
     char *output_file = argv[2];
     int conversion_type = atoi(argv[3]);
 
-    // 3. Varsayılan Değerler ve Opsiyonel Argümanlar
+   
     int separator = 1; // Default comma [cite: 7]
     int opsys = 2;     // Default windows [cite: 7]
     int encoding = 3;  // Default UTF-8 [cite: 18]
 
-    // 4. Bayrakları (Flags) Tara
+   
     for (int i = 4; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0) {
             print_usage();
@@ -289,7 +313,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // 5. Okunan Değerlerin Doğrulanması (Debug)
+    
     printf("\n--- Gelen Parametreler ---\n");
     printf("Input File      : %s\n", input_file);
     printf("Output File     : %s\n", output_file);
@@ -300,22 +324,20 @@ int main(int argc, char *argv[]) {
         printf("Target Encoding : %d\n", encoding);
     }
     printf("--------------------------\n");
-    // --- FONKSİYON DALLANMASI ---
+    
     switch (conversion_type) {
         case 1:
-            // CSV -> Binary Dönüşümü
-            // Fonksiyonu artık yeni parametreleri (separator, opsys) ile çağırıyoruz
+            // CSV -> Binary             
             csv_to_binary(input_file, output_file, separator, opsys);
             break;
 
         case 2:
-            // Binary -> XML (UTF-8) Dönüşümü
+            // Binary -> XML (UTF-8) 
             binary_to_xml(input_file, output_file);
             break;
 
         case 3:
             printf("Mod 3: XML Doğrulaması Başlatılıyor...\n");
-             // Ödev isterine göre: argv[1] XML, argv[2] XSD dosyasıdır
              validate_xml(input_file, output_file); 
             break;
 
@@ -330,7 +352,7 @@ int main(int argc, char *argv[]) {
             return 1;
     }
 
-    // Gelecek Adim: Burada switch(conversion_type) ile fonksiyonlara dallanacagiz.
+    
 
     return 0;
 }
